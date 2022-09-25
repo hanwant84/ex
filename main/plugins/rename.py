@@ -12,28 +12,29 @@
 #
 #  License can be found in < https://github.com/vasusen-code/VIDEOconvertor/blob/public/LICENSE> .
 
-import os, time
-
+import os, time, requests
 from datetime import datetime as dt
+from .. import Drone, BOT_UN, MONGODB_URI
 from telethon import events
-from telethon.tl.types import DocumentAttributeVideo
 from ethon.telefunc import fast_download, fast_upload
 from ethon.pyutils import rename
 from ethon.pyfunc import video_metadata
-
-from .. import Drone, BOT_UN
-
 from LOCAL.localisation import SUPPORT_LINK
+from main.Database.database import Database
 from LOCAL.localisation import JPG3 as t
+from telethon.tl.types import DocumentAttributeVideo
 
 async def media_rename(event, msg, new_name):
     edit = await event.client.send_message(event.chat_id, 'Trying to process.', reply_to=msg.id)
-    try:
-        if os.path.exists(f'./{event.sender_id}.jpg'):
-            THUMB = f'./{event.sender_id}.jpg'
-        else:
-            THUMB = t
-    except Exception:
+    db = Database(MONGODB_URI, 'videoconvertor')
+    T = await db.get_thumb(event.sender_id)
+    if T is not None:
+        ext = T.split("/")[4]
+        r = requests.get(T, allow_redirects=True)
+        path = dt.now().isoformat("_", "seconds") + ext
+        open(path , 'wb').write(r.content)
+        THUMB = path
+    else:
         THUMB = t
     Drone = event.client
     DT = time.time()

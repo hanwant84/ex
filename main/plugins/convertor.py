@@ -13,17 +13,14 @@
 #  License can be found in < https://github.com/vasusen-code/VIDEOconvertor/blob/public/LICENSE> .
 
 import os, subprocess, time
-
-from datetime import datetime as dt
+from .. import BOT_UN
 from telethon import events
-from telethon.tl.types import DocumentAttributeVideo
+from LOCAL.localisation import SUPPORT_LINK, JPG, JPG2
 from ethon.telefunc import fast_download, fast_upload
 from ethon.pyfunc import bash, video_metadata
 from ethon.pyutils import rename
-
-from .. import BOT_UN
-
-from LOCAL.localisation import SUPPORT_LINK, JPG, JPG2
+from datetime import datetime as dt
+from telethon.tl.types import DocumentAttributeVideo
 
 async def mp3(event, msg):
     Drone = event.client
@@ -52,12 +49,14 @@ async def mp3(event, msg):
         DT = time.time()
         await fast_download(name, file, Drone, edit, DT, "**DOWNLOADING:**")
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while downloading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
         await edit.edit("Converting.")
         bash(f"ffmpeg -i {name} -codec:a libmp3lame -q:a 0 {out}.mp3")
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while converting!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
@@ -65,6 +64,7 @@ async def mp3(event, msg):
         uploader = await fast_upload(f'{out}.mp3', f'{out}.mp3', UT, Drone, edit, '**UPLOADING:**')
         await Drone.send_file(event.chat_id, uploader, thumb=JPG, caption=f'**AUDIO EXTRACTED by** : @{BOT_UN}', force_document=True)
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     await edit.delete()
@@ -98,6 +98,7 @@ async def flac(event, msg):
         DT = time.time()
         await fast_download(name, file, Drone, edit, DT, "**DOWNLOADING:**")
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while downloading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
@@ -105,6 +106,7 @@ async def flac(event, msg):
         bash(f"ffmpeg -i {name} -codec:a libmp3lame -q:a 0 {out}.mp3")
         bash(f'ffmpeg -i {out}.mp3 -c:a flac {out}.flac')
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while converting!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
@@ -112,6 +114,7 @@ async def flac(event, msg):
         uploader = await fast_upload(f'{out}.flac', f'{out}.flac', UT, Drone, edit, '**UPLOADING:**')
         await Drone.send_file(event.chat_id, uploader, thumb=JPG, caption=f'**AUDIO EXTRACTED by** : @{BOT_UN}', force_document=True)
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     await edit.delete()
@@ -146,6 +149,7 @@ async def wav(event, msg):
         DT = time.time()
         await fast_download(name, file, Drone, edit, DT, "**DOWNLOADING:**")
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while downloading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
@@ -153,6 +157,7 @@ async def wav(event, msg):
         bash(f"ffmpeg -i {name} -codec:a libmp3lame -q:a 0 {out}.mp3")
         bash(f'ffmpeg -i {out}.mp3 {out}.wav')
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while converting!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     try:
@@ -160,6 +165,7 @@ async def wav(event, msg):
         uploader = await fast_upload(f'{out}.wav', f'{out}.wav', UT, Drone, edit, '**UPLOADING:**')
         await Drone.send_file(event.chat_id, uploader, thumb=JPG, caption=f'**AUDIO EXTRACTED by** : @{BOT_UN}', force_document=True)
     except Exception as e:
+        os.rmdir("audioconvert")
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
     await edit.delete()
@@ -209,7 +215,7 @@ async def mp4(event, msg):
     except Exception as e:
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
-    await edit.delete()                           
+    await edit.delete()                      
     os.remove(f'{out}.mp4')                 
                                            
 async def mkv(event, msg):
@@ -254,7 +260,7 @@ async def mkv(event, msg):
     except Exception as e:
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
-    await edit.delete()                      
+    await edit.delete()                        
     os.remove(f'{out}')
              
 async def webm(event, msg):
@@ -299,7 +305,7 @@ async def webm(event, msg):
     except Exception as e:
         print(e)
         return await edit.edit(f"An error occured while uploading!\n\nContact [SUPPORT]({SUPPORT_LINK})")
-    await edit.delete()                    
+    await edit.delete()                 
     os.remove(f'{out}')
              
 async def file(event, msg):

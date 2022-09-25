@@ -14,7 +14,7 @@ for name in files:
         patt = Path(a.name)
         plugin_name = patt.stem
         load_plugins(plugin_name.replace(".py", ""))
-
+        
 print("Successfully deployed!")
 print("@MaheshChauhan • @DroneBots")
 

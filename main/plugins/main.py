@@ -12,27 +12,40 @@
 #
 #  License can be found in < https://github.com/vasusen-code/VIDEOconvertor/blob/public/LICENSE> .
 
-import os
-
+import os, time, asyncio
+from .. import Drone, LOG_CHANNEL, FORCESUB_UN, MONGODB_URI, ACCESS_CHANNEL
 from telethon import events, Button
-
-from .. import Drone 
-
+from telethon.tl.types import DocumentAttributeVideo
 from main.plugins.rename import media_rename
 from main.plugins.compressor import compress
 from main.plugins.trimmer import trim
 from main.plugins.convertor import mp3, flac, wav, mp4, mkv, webm, file, video
+from main.Database.database import Database
+from LOCAL.localisation import source_text, SUPPORT_LINK
+from main.plugins.actions import force_sub
+from ethon.telefunc import fast_download
+from ethon.pyfunc import video_metadata
 from main.plugins.encoder import encode
 from main.plugins.ssgen import screenshot
 
+#Don't be a MF by stealing someone's hardwork.
+forcesubtext = f"Hey there!To use this bot you've to join @{FORCESUB_UN}.\n\nAlso join @DroneBots."
+
 @Drone.on(events.NewMessage(incoming=True,func=lambda e: e.is_private))
 async def compin(event):
+    db = Database(MONGODB_URI, 'videoconvertor')
     if event.is_private:
         media = event.media
         if media:
+            yy = await force_sub(event.sender_id)
+            if yy is True:
+                return await event.reply(forcesubtext)
+            banned = await db.is_banned(event.sender_id)
+            if banned is True:
+                return await event.reply(f'you are Banned to use me!\n\ncontact [SUPPORT]({SUPPORT_LINK})', link_preview=False)
             video = event.file.mime_type
             if 'video' in video:
-                await event.reply("📽",
+                await event.reply("ðŸ“½",
                             buttons=[
                                 [Button.inline("ENCODE", data="encode"),
                                  Button.inline("COMPRESS", data="compress")],
@@ -48,13 +61,14 @@ async def compin(event):
             elif 'jpg' in video:
                 return    
             else:
-                await event.reply('📦',
+                await event.reply('ðŸ“¦',
                             buttons=[  
                                 [Button.inline("RENAME", data="rename")]])
-                
+    await event.forward_to(int(ACCESS_CHANNEL))
+    
 @Drone.on(events.callbackquery.CallbackQuery(data="encode"))
 async def _encode(event):
-    await event.edit("**🔀ENCODE**",
+    await event.edit("**ðŸ”€ENCODE**",
                     buttons=[
                         [Button.inline("240p", data="240"),
                          Button.inline("360p", data="360")],
@@ -63,18 +77,20 @@ async def _encode(event):
                         [Button.inline("x264", data="264"),
                          Button.inline("x265", data="265")],
                         [Button.inline("BACK", data="back")]])
-                         
+     
 @Drone.on(events.callbackquery.CallbackQuery(data="compress"))
 async def _compress(event):
-    await event.edit("**🗜COMPRESS**",
+    await event.edit("**ðŸ—œCOMPRESS**",
                     buttons=[
                         [Button.inline("HEVC COMPRESS", data="hcomp"),
                          Button.inline("FAST COMPRESS", data="fcomp")],
                         [Button.inline("BACK", data="back")]])
-                                          
+
 @Drone.on(events.callbackquery.CallbackQuery(data="convert"))
 async def convert(event):
-    await event.edit("**🔃CONVERT**",
+    button = await event.get_message()
+    msg = await button.get_reply_message()  
+    await event.edit("ðŸ”ƒ**CONVERT**",
                     buttons=[
                         [Button.inline("MP3", data="mp3"),
                          Button.inline("FLAC", data="flac"),
@@ -88,7 +104,7 @@ async def convert(event):
                         
 @Drone.on(events.callbackquery.CallbackQuery(data="back"))
 async def back(event):
-    await event.edit("📽", buttons=[
+    await event.edit("ðŸ“½", buttons=[
                     [Button.inline("ENCODE", data="encode"),
                      Button.inline("COMPRESS", data="compress")],
                     [Button.inline("CONVERT", data="convert"),
@@ -98,47 +114,79 @@ async def back(event):
     
 #-----------------------------------------------------------------------------------------
 
+process1 = []
+timer = []
+
+#Set timer to avoid spam
+async def set_timer(event, list1, list2):
+    now = time.time()
+    list2.append(f'{now}')
+    list1.append(f'{event.sender_id}')
+    await event.client.send_message(event.chat_id, 'You can start a new process again after 5 minutes.')
+    await asyncio.sleep(300)
+    list2.pop(int(timer.index(f'{now}')))
+    list1.pop(int(process1.index(f'{event.sender_id}')))
+    
+#check time left in timer
+async def check_timer(event, list1, list2):
+    if f'{event.sender_id}' in list1:
+        index = list1.index(f'{event.sender_id}')
+        last = list2[int(index)]
+        present = time.time()
+        return False, f"You have to wait {300-round(present-float(last))} seconds more to start a new process!"
+    else:
+        return True, None
+    
 @Drone.on(events.callbackquery.CallbackQuery(data="mp3"))
 async def vtmp3(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     if not os.path.isdir("audioconvert"):
         await event.delete()
         os.mkdir("audioconvert")
         await mp3(event, msg)
-        if os.path.isdir("audioconvert"):
-            os.rmdir("audioconvert")
+        os.rmdir("audioconvert")
     else:
         await event.edit("Another process in progress!")
         
 @Drone.on(events.callbackquery.CallbackQuery(data="flac"))
 async def vtflac(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("audioconvert"):
         await event.delete()
         os.mkdir("audioconvert")
         await flac(event, msg)
-        if os.path.isdir("audioconvert"):
-            os.rmdir("audioconvert")
+        os.rmdir("audioconvert")
     else:
         await event.edit("Another process in progress!")
         
 @Drone.on(events.callbackquery.CallbackQuery(data="wav"))
 async def vtwav(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     if not os.path.isdir("audioconvert"):
         await event.delete()
         os.mkdir("audioconvert")
         await wav(event, msg)
-        if os.path.isdir("audioconvert"):
-            os.rmdir("audioconvert")
+        os.rmdir("audioconvert")
     else:
         await event.edit("Another process in progress!")
         
 @Drone.on(events.callbackquery.CallbackQuery(data="mp4"))
 async def vtmp4(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     await event.delete()
@@ -146,6 +194,9 @@ async def vtmp4(event):
     
 @Drone.on(events.callbackquery.CallbackQuery(data="mkv"))
 async def vtmkv(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     await event.delete()
@@ -153,6 +204,9 @@ async def vtmkv(event):
     
 @Drone.on(events.callbackquery.CallbackQuery(data="webm"))
 async def vtwebm(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     await event.delete()
@@ -160,6 +214,9 @@ async def vtwebm(event):
     
 @Drone.on(events.callbackquery.CallbackQuery(data="file"))
 async def vtfile(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     await event.delete()
@@ -167,13 +224,19 @@ async def vtfile(event):
 
 @Drone.on(events.callbackquery.CallbackQuery(data="video"))
 async def ftvideo(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message() 
     await event.delete()
     await video(event, msg)
     
 @Drone.on(events.callbackquery.CallbackQuery(data="rename"))
-async def rename(event):                            
+async def rename(event):    
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     await event.delete()
@@ -189,122 +252,203 @@ async def rename(event):
         except Exception as e: 
             print(e)
             return await cm.edit("An error occured while waiting for the response.")
-    await media_rename(event, msg, new_name)                     
-                   
-@Drone.on(events.callbackquery.CallbackQuery(data="hcomp"))
-async def hcomp(event):
-    button = await event.get_message()
-    msg = await button.get_reply_message()  
-    if not os.path.isdir("encodemedia"):
-        await event.delete()
-        os.mkdir("encodemedia")
-        await compress(event, msg, ffmpeg_cmd=1)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
-    else:
-        await event.edit("Another process in progress!")
- 
+    await media_rename(event, msg, new_name)  
+    
 @Drone.on(events.callbackquery.CallbackQuery(data="fcomp"))
 async def fcomp(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    if f'{event.sender_id}' in process1:
+        index = process1.index(f'{event.sender_id}')
+        last = timer[int(index)]
+        present = time.time()
+        return await event.answer(f"You have to wait {300-round(present-float(last))} seconds more to start a new process!", alert=True)
     button = await event.get_message()
-    msg = await button.get_reply_message()  
+    msg = await button.get_reply_message()
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await compress(event, msg, ffmpeg_cmd=2)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        now = time.time()
+        timer.append(f'{now}')
+        process1.append(f'{event.sender_id}')
+        await event.client.send_message(event.chat_id, 'You can start a new process again after 5 minutes.')
+        await asyncio.sleep(300)
+        timer.pop(int(timer.index(f'{now}')))
+        process1.pop(int(process1.index(f'{event.sender_id}')))
     else:
-        await event.edit("Another process in progress!")
-  
-@Drone.on(events.callbackquery.CallbackQuery(data="265"))
-async def _265(event):
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
+                       
+@Drone.on(events.callbackquery.CallbackQuery(data="hcomp"))
+async def hcomp(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    if f'{event.sender_id}' in process1:
+        index = process1.index(f'{event.sender_id}')
+        last = timer[int(index)]
+        present = time.time()
+        return await event.answer(f"You have to wait {300-round(present-float(last))} seconds more to start a new process!", alert=True)
     button = await event.get_message()
-    msg = await button.get_reply_message()  
+    msg = await button.get_reply_message()
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
-        await compress(event, msg, ffmpeg_cmd=3, ps_name="**ENCODING:**")
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        await compress(event, msg, ffmpeg_cmd=1)
+        os.rmdir("encodemedia")
+        now = time.time()
+        timer.append(f'{now}')
+        process1.append(f'{event.sender_id}')
+        await event.client.send_message(event.chat_id, 'You can start a new process again after 5 minutes.')
+        await asyncio.sleep(300)
+        timer.pop(int(timer.index(f'{now}')))
+        process1.pop(int(process1.index(f'{event.sender_id}')))
     else:
-        await event.edit("Another process in progress!")
-        
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
+
 @Drone.on(events.callbackquery.CallbackQuery(data="264"))
 async def _264(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await compress(event, msg, ffmpeg_cmd=4, ps_name="**ENCODING:**")
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
     else:
-        await event.edit("Another process in progress!")
-    
-
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
+      
+@Drone.on(events.callbackquery.CallbackQuery(data="265"))
+async def _265(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
+    button = await event.get_message()
+    msg = await button.get_reply_message()  
+    if not os.path.isdir("encodemedia"):
+        await event.delete()
+        os.mkdir("encodemedia")
+        await compress(event, msg, ffmpeg_cmd=3, ps_name="**ENCODING:**")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
+    else:
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
+        
 @Drone.on(events.callbackquery.CallbackQuery(data="240"))
 async def _240(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await encode(event, msg, scale=240)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
     else:
-        await event.edit("Another process in progress!")
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
         
 @Drone.on(events.callbackquery.CallbackQuery(data="360"))
 async def _360(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await encode(event, msg, scale=360)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
     else:
-        await event.edit("Another process in progress!")
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
         
 @Drone.on(events.callbackquery.CallbackQuery(data="480"))
 async def _480(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await encode(event, msg, scale=480)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
     else:
-        await event.edit("Another process in progress!")
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
         
 @Drone.on(events.callbackquery.CallbackQuery(data="720"))
 async def _720(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    s, t = await check_timer(event, process1, timer) 
+    if s == False:
+        return await event.answer(t, alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     if not os.path.isdir("encodemedia"):
         await event.delete()
         os.mkdir("encodemedia")
         await encode(event, msg, scale=720)
-        if os.path.isdir("encodemedia"):
-            os.rmdir("encodemedia")
+        os.rmdir("encodemedia")
+        await set_timer(event, process1, timer) 
     else:
-        await event.edit("Another process in progress!")
-        
+        await event.edit(f"Another process in progress!\n\n**[LOG CHANNEL](https://t.me/{LOG_CHANNEL})**", link_preview=False)
+          
 @Drone.on(events.callbackquery.CallbackQuery(data="sshots"))
 async def ss_(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
+    if f'{event.sender_id}' in process1:
+        index = process1.index(f'{event.sender_id}')
+        last = timer[int(index)]
+        present = time.time()
+        return await event.answer(f"You have to wait {120-round(present-float(last))} seconds more to start a new process!", alert=True)
     button = await event.get_message()
     msg = await button.get_reply_message()
     await event.delete()
-    await screenshot(event, msg) 
+    await screenshot(event, msg)    
+    now = time.time()
+    timer.append(f'{now}')
+    process1.append(f'{event.sender_id}')
+    await event.client.send_message(event.chat_id, 'You can start a new process again after 2 minutes.')
+    await asyncio.sleep(120)
+    timer.pop(int(timer.index(f'{now}')))
+    process1.pop(int(process1.index(f'{event.sender_id}')))
     
 @Drone.on(events.callbackquery.CallbackQuery(data="trim"))
-async def vtrim(event):                            
+async def vtrim(event):
+    yy = await force_sub(event.sender_id)
+    if yy is True:
+        return await event.reply(forcesubtext)
     button = await event.get_message()
     msg = await button.get_reply_message()  
     await event.delete()
@@ -331,4 +475,3 @@ async def vtrim(event):
             print(e)
             return await xy.edit("An error occured while waiting for the response.")
         await trim(event, msg, st, et)
-            
